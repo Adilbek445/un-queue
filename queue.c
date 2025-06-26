@@ -1,4 +1,5 @@
 #include "data.h"
+#include "message.h"
 #include <fcntl.h>
 #include <inttypes.h>
 #include <stdint.h>
@@ -52,9 +53,7 @@ int main(int argc, char *argv[]) {
     for (int i = 0; i < num_events; i++) {
       int fd = events[i].data.fd;
 
-      ssize_t size = read(fd, buf, BUFFER_SIZE);
-
-      char header_flag = buf[0];
+      handleMessage(fd);
     }
   }
 

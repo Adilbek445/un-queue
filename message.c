@@ -12,32 +12,31 @@
 
 #define BUFFER_SIZE 1024
 
-void handleMessage(int epoll_fd, Message *message, char *buf) {
+void handleMessage(int epoll_fd) {
 
-  char buffer[3];
+  MessageHeader message_header = {0, 0, 0};
+  ssize_t size = read(epoll_fd, &message_header, sizeof(message_header));
+  char header_flag = message_header.command_type;
+  uint16_t queue_name_size = message_header.queue_name_len;
+  uint32_t tailer_or_payload_size = message_header.tailer_size;
 
-  ssize_t size = read(epoll_fd, buffer, 3);
+  printf("queue_name_size %u\n", queue_name_size);
 
-  char header_flag = buffer[0];
+  printf("tailer_or_payload_size %u\n", tailer_or_payload_size);
 
   if (header_flag == GET_MESSAGE) {
     printf("Получение сообщения\n");
 
-    int16_t queue_size = ((uint8_t)buf[1] << 8) | (uint8_t)buf[2];
+    char name_queue[queue_name_size + tailer_or_payload_size];
+    char tailer[tailer_or_payload_size + 1];
 
-    char name_queue[256];
+    ssize_t size = read(epoll_fd, name_queue, queue_name_size);
 
-    char
+    memcpy(tailer, name_queue + queue_name_size, tailer_or_payload_size);
 
-        ssize_t size = read(epoll_fd, buffer, 3);
-
-    memcpy(name_queue, &buf[1], 256);
+    name_queue[queue_name_size + 1] = '\0';
 
     printf("Название очереди: %s \n", name_queue);
-
-    char tailer[512];
-
-    memcpy(tailer, &buf[256], 512);
 
     printf("Название потребителя: %s \n", tailer);
   }
@@ -45,12 +44,6 @@ void handleMessage(int epoll_fd, Message *message, char *buf) {
   if (header_flag == GET_STAT) {
 
     printf("Получение статистики\n");
-
-    char name_queue[256];
-
-    memcpy(name_queue, &buf[1], 256);
-
-    printf("Название очереди: %s", name_queue);
   }
 
   if (header_flag == WRITE_MESSAGE) {

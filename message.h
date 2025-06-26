@@ -7,4 +7,12 @@ typedef struct {
   char *consumer_name;
 } Message;
 
-void handleMessage(int epoll_fd, Message *message, char *buf);
+#pragma pack(push, 1)
+typedef struct {
+  uint8_t command_type;
+  uint16_t queue_name_len;
+  uint32_t tailer_size;
+} MessageHeader;
+#pragma pack(pop)
+
+void handleMessage(int epoll_fd);

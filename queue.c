@@ -14,6 +14,7 @@
 #define DATA_FILE_EXTENSION ".dat";
 #define INDEX_FILE_EXTENSION ".idx";
 #define METADATA_FILE "metadata.mt"
+#define PORT 8070
 
 #define MAX_EVENTS 1
 #define BUFFER_SIZE 1024

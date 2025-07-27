@@ -1,7 +1,10 @@
-#include "message.h"
+#include "data.h"
+#include "utils.h"
 #include <stdint.h>
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
+#include <sys/stat.h>
 #include <unistd.h>
 
 // флаги в заголовке сообщения
@@ -12,7 +15,11 @@
 
 #define BUFFER_SIZE 1024
 
+char current_dir[128];
+
 void handleMessage(int epoll_fd) {
+
+  init_current_directory();
   uint8_t header[7];
   ssize_t headerSize = read(epoll_fd, header, sizeof(header));
   char header_flag = header[0];
@@ -21,10 +28,17 @@ void handleMessage(int epoll_fd) {
       (header[3] << 24) | (header[4] << 16) | (header[5] << 8) | header[6];
 
   printf("queue_name_size %u\n", queue_name_size);
-
   printf("tailer_or_payload_size %u\n", tailer_or_payload_size);
 
-  char name_queue[queue_name_size + tailer_or_payload_size];
+  char *name_queue;
+
+  char name_queue_stack[512];
+
+  if (header_flag == WRITE_MESSAGE)
+    name_queue = malloc(queue_name_size + tailer_or_payload_size);
+  else
+    name_queue = name_queue_stack;
+
   char tailer[tailer_or_payload_size + 1];
 
   ssize_t size =
@@ -35,11 +49,17 @@ void handleMessage(int epoll_fd) {
   printf("Название очереди: %s \n", name_queue);
   printf("Название потребителя: %s \n", tailer);
 
+  char directory[512];
+
+  stpcpy(directory, get_current_directory());
+  stpcpy(directory, name_queue);
+
   if (header_flag == GET_MESSAGE) {
     printf("Получение сообщения\n");
+    char text[] = "Hello World";
+    write(epoll_fd, text, 11);
 
     close(epoll_fd);
-
     return;
   }
 
@@ -51,6 +71,12 @@ void handleMessage(int epoll_fd) {
 
   if (header_flag == WRITE_MESSAGE) {
     printf("Запись сообщения:");
+
+    if (!is_directory_exist(directory)) {
+      mkdir(name_queue, 0755);
+    }
+    char *data = name_queue + queue_name_size;
+    push(name_queue, data, tailer_or_payload_size);
     close(epoll_fd);
     return;
   }
@@ -64,3 +90,11 @@ void handleMessage(int epoll_fd) {
   printf("Непонятный заголовок\n");
   close(epoll_fd);
 }
+
+void init_current_directory() {
+  if (getcwd(current_dir, sizeof(current_dir)) == NULL) {
+    perror("getcwd");
+  }
+}
+
+const char *get_current_directory() { return current_dir; }

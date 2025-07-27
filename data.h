@@ -1,3 +1,7 @@
+#ifndef DATA_H
+#define DATA_H
+
+#include "message.h"
 #include <fcntl.h>
 #include <inttypes.h>
 #include <stdio.h>
@@ -22,9 +26,9 @@ typedef struct {
 
 #pragma pack(push, 1)
 typedef struct {
-  uint8_t currentSegment;
+  uint32_t currentSegment;
   uint64_t currentOffsetWrite;
-  uint8_t countSegment;
+  uint32_t countSegment;
   uint32_t countMessage;
 } Metadata;
 #pragma pack(pop)
@@ -33,3 +37,5 @@ typedef struct {
   uint32_t segmentId;
   uint64_t offsetInData;
 } IndexData;
+
+#endif

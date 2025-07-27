@@ -8,29 +8,12 @@
 #include <sys/epoll.h>
 #include <unistd.h>
 
-#define MAX_SEGMENT_SIZE (512 * 1024 * 1024)
-#define DATA_FILE_PREFIX "data-";
-#define INDEX_DATA_PREFIX "index-"
-#define DATA_FILE_EXTENSION ".dat";
-#define INDEX_FILE_EXTENSION ".idx";
-#define METADATA_FILE "metadata.mt"
 #define PORT 8070
 
 #define MAX_EVENTS 1
 #define BUFFER_SIZE 1024
-char current_dir[128];
-
-void init_current_directory() {
-  if (getcwd(current_dir, sizeof(current_dir)) == NULL) {
-    perror("getcwd");
-  }
-}
-
-const char *get_current_directory() { return current_dir; }
 
 int main(int argc, char *argv[]) {
-
-  init_current_directory();
 
   int channel_fd = open(argv[1], O_RDONLY);
 

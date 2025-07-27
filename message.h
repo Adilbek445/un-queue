@@ -1,3 +1,7 @@
+
+#ifndef MESSAGE_H
+#define MESSAGE_H
+
 #include <inttypes.h>
 #include <stdio.h>
 
@@ -16,3 +20,7 @@ typedef struct {
 #pragma pack(pop)
 
 void handleMessage(int epoll_fd);
+void init_current_directory();
+const char *get_current_directory();
+
+#endif

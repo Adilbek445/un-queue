@@ -16,6 +16,12 @@ void getStatsQueue();
 
 void checkNewMessage();
 
+void push_new_metadata(int metadata_fd, const char *path,
+                       const unsigned char *data, int size);
+
+void push_existing_metadata(int metadata_fd, const char *path,
+                            const unsigned char *data, int size);
+
 #pragma pack(push, 1)
 typedef struct {
   uint32_t size;
@@ -33,9 +39,20 @@ typedef struct {
 } Metadata;
 #pragma pack(pop)
 
+#pragma pack(push, 1)
 typedef struct {
   uint32_t segmentId;
+  uint32_t size;
   uint64_t offsetInData;
 } IndexData;
+#pragma pack(pop)
+
+typedef struct {
+  char metadata_path[512];
+  char segment_path[512];
+  char index_path[512];
+} FilePaths;
+
+void build_file_paths(const char *base_dir, uint32_t segment, FilePaths *paths);
 
 #endif

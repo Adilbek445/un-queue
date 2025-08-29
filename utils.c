@@ -51,3 +51,11 @@ void deserializeMetadata(const uint8_t *buffer, Metadata *meta) {
   meta->countSegment = read_u32_be(buffer + 12);
   meta->countMessage = read_u32_be(buffer + 16);
 }
+
+void getBufferAtTime(uint8_t *buffer) {
+  struct timespec ts;
+  time_t sec = ts.tv_sec;
+  for (int i = 0; i < 8; ++i) {
+    buffer[7 - i] = (sec >> (i * 8)) & 0xFF;
+  }
+}

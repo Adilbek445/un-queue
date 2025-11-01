@@ -19,42 +19,92 @@ int lock_file_by_fd(int fd, int start, int len, short lock_type) {
   return fcntl(fd, F_SETLKW, &fl);
 }
 
-void push(const char *file_name, const unsigned char *data, int size) {
+/**
+ * @brief Записывает сообщение в файловую очередь.
+ *
+ * Проверяет есть файл metadata.mt. Если есть записывает в него сообщение.
+ * Если нет создает новый файл.
+ *
+ * @param queue_name Директория очереди.
+ * @param data Данные для записи.
+ * @param size Размер данных в байтах.
+ */
+void push(const char *queue_name, const unsigned char *data, int size) {
   char metadata_path[512];
   snprintf(metadata_path, sizeof(metadata_path), "%s/%s/%s",
-           get_current_directory(), file_name, METADATA_FILE);
+           get_current_directory(), queue_name, METADATA_FILE);
   printf("%s", metadata_path);
 
   int metadata_fd = open(metadata_path, O_CREAT | O_WRONLY | O_EXCL);
   if (metadata_fd > 0) {
-    push_new_metadata(metadata_fd, file_name, data, size);
+    push_new_metadata(metadata_fd, queue_name, data, size);
   } else {
     metadata_fd = open(metadata_path, O_CREAT | O_WRONLY);
-    push_existing_metadata(metadata_fd, file_name, data, size);
+    push_existing_metadata(metadata_fd, queue_name, data, size);
   }
 }
 
+/**
+ * @brief Записывает данные в новый файл
+ *
+ * Создаёт новый файл metadata.mt. Собирает данные и записывает в этот файл
+ *
+ * @param metadata_fd Файловый дескриптор нового файла
+ * @param path Путь к очереди.
+ * @param data Данные для записи.
+ * @param size Размер данных в байтах.
+ */
 void push_new_metadata(int metadata_fd, const char *path,
                        const unsigned char *data, int size) {
 
-  const Metadata metadata = {1, 0, 1, 0};
-  uint8_t buffer[20];
-  serializeMetadata(&metadata, buffer);
   lock_file_by_fd(metadata_fd, 0, 0, F_WRLCK);
-  write(metadata_fd, buffer, 20);
-  char segment_id[32];
+  const Metadata metadata = {1, 0, 1, 0};
+  uint8_t buffer_metadata[20];
+  serializeMetadata(&metadata, buffer_metadata);
+  write(metadata_fd, buffer_metadata, 20);
   uint32_t segment = 1;
-  snprintf(segment_id, sizeof(segment_id), "data-%07u.dat", segment);
 
   FilePaths file_path = {};
 
   build_file_paths(path, segment, &file_path);
 
-  int data_fd = open(file_path.segment_path, O_CREAT | O_WRONLY);
+  uint8_t time[8];
 
-  // TO_DO запись данных в файл
+  getBufferAtTime(time);
+
+  uint32_t size_data = sizeof(data);
+  uint8_t size_data_buffer[4];
+  write_u32_be(size_data_buffer, size_data);
+
+  int data_file_fd =
+      open(file_path.segment_path, O_CREAT | O_WRONLY | O_APPEND);
+
+  write(data_file_fd, size_data_buffer, sizeof(size_data_buffer));
+  write(data_file_fd, time, sizeof(time));
+  write(data_file_fd, data, sizeof(data));
+
+  int index_file_fd = open(file_path.index_path, O_CREAT | O_WRONLY | O_APPEND);
+
+  IndexData index_struct = {1, 1, sizeof(data), 0, (uint64_t)time};
+
+  uint8_t index_data[28];
+
+  serializeIndexData(&index_struct, index_data);
+
+  write(index_file_fd, index_data, sizeof(index_data));
+
+  lock_file_by_fd(metadata_fd, 0, 0, F_UNLCK);
 }
 
+/**
+ * @brief Строит структуру FilePaths
+ *
+ * Заполняет структуру FilePaths
+ *
+ * @param base_dir Директория очереди.
+ * @param segment Номер сегмента
+ * @param paths Структура FilePaths
+ */
 void build_file_paths(const char *base_dir, uint32_t segment,
                       FilePaths *paths) {
   snprintf(paths->metadata_path, sizeof(paths->metadata_path), "%s/%s",
@@ -70,8 +120,8 @@ void build_file_paths(const char *base_dir, uint32_t segment,
 void push_existing_metadata(int metadata_fd, const char *path,
                             const unsigned char *data, int size) {
 
-  Metadata existMetadata = {};
   lock_file_by_fd(metadata_fd, 0, 0, F_WRLCK);
+  Metadata existMetadata = {};
 
   uint8_t buffer[20];
   read(metadata_fd, buffer, 20);
@@ -123,6 +173,7 @@ void push_existing_metadata(int metadata_fd, const char *path,
   }
 
   serializeMetadata(&existMetadata, buffer);
-  lock_file_by_fd(metadata_fd, 0, 0, F_WRLCK);
   write(metadata_fd, buffer, 20);
+
+  lock_file_by_fd(metadata_fd, 0, 0, F_UNLCK);
 }

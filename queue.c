@@ -40,7 +40,7 @@ int main(int argc, char *argv[]) {
       handleMessage(fd);
     }
   }
-
+  /*
   int fd = open("/home/adilbek445/projects/c-lang/un-queue/", O_RDWR | O_TRUNC);
   Metadata q = {8, 32, 11, 256};
   Metadata w = {0, 0, 0, 0};
@@ -67,4 +67,6 @@ int main(int argc, char *argv[]) {
   printf("currentOffsetWrite: %lu\n", w.currentOffsetWrite);
   printf("countSegment: %u\n", w.countSegment);
   printf("countMessage: %u\n", w.countMessage);
+
+  */
 }

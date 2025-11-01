@@ -4,17 +4,18 @@
 #include "message.h"
 #include <fcntl.h>
 #include <inttypes.h>
+#include <stdint.h>
 #include <stdio.h>
 
 int lock_file_by_fd(int fd, int start, int len, short lock_type);
 
 void push(const char *file_name, const unsigned char *data, int size);
 
-void pop(const char *file_name, unsigned char *data);
+void pop(const char *queue_name, unsigned char *tailer_name);
 
-void getStatsQueue();
+void getStatsQueue(const char *queue_name);
 
-void checkNewMessage();
+void checkNewMessage(const char *queue_name);
 
 void push_new_metadata(int metadata_fd, const char *path,
                        const unsigned char *data, int size);
@@ -41,9 +42,11 @@ typedef struct {
 
 #pragma pack(push, 1)
 typedef struct {
+  uint32_t messageId;
   uint32_t segmentId;
   uint32_t size;
   uint64_t offsetInData;
+  uint64_t time;
 } IndexData;
 #pragma pack(pop)
 

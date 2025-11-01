@@ -52,6 +52,22 @@ void deserializeMetadata(const uint8_t *buffer, Metadata *meta) {
   meta->countMessage = read_u32_be(buffer + 16);
 }
 
+void serializeIndexData(const IndexData *entry, uint8_t *buffer) {
+  write_u32_be(buffer, entry->messageId);
+  write_u32_be(buffer + 4, entry->segmentId);
+  write_u32_be(buffer + 8, entry->size);
+  write_u64_be(buffer + 12, entry->offsetInData);
+  write_u64_be(buffer + 20, entry->time);
+}
+
+void deserializeIndexData(const uint8_t *buffer, IndexData *entry) {
+  entry->messageId = read_u32_be(buffer);
+  entry->segmentId = read_u32_be(buffer + 4);
+  entry->size = read_u32_be(buffer + 8);
+  entry->offsetInData = read_u64_be(buffer + 12);
+  entry->time = read_u64_be(buffer + 20);
+}
+
 void getBufferAtTime(uint8_t *buffer) {
   struct timespec ts;
   time_t sec = ts.tv_sec;

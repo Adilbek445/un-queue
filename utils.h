@@ -15,6 +15,9 @@ uint64_t read_u64_be(const uint8_t *buf);
 void serializeMetadata(const Metadata *meta, uint8_t *buffer);
 void deserializeMetadata(const uint8_t *buffer, Metadata *meta);
 
+void serializeIndexData(const IndexData *entry, uint8_t *buffer);
+void deserializeIndexData(const uint8_t *buffer, IndexData *entry);
+
 void getBufferAtTime(uint8_t *buffer);
 
 #endif

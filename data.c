@@ -11,6 +11,7 @@
 #define INDEX_DATA_FILE "index.idx"
 #define DATA_FILE_EXTENSION ".dat"
 #define METADATA_FILE "metadata.mt"
+#define DATA_HEADER_SIZE 12
 
 int lock_file_by_fd(int fd, int start, int len, short lock_type) {
   struct flock fl = {
@@ -29,11 +30,11 @@ int lock_file_by_fd(int fd, int start, int len, short lock_type) {
  * @param data Данные для записи.
  * @param size Размер данных в байтах.
  */
-void push(const char *queue_name, const unsigned char *data, int size) {
+void push(const char *queue_name, char *data, int size) {
   char metadata_path[512];
   snprintf(metadata_path, sizeof(metadata_path), "%s/%s/%s",
            get_current_directory(), queue_name, METADATA_FILE);
-  printf("%s", metadata_path);
+  printf("%s \n", metadata_path);
 
   int metadata_fd = open(metadata_path, O_CREAT | O_WRONLY | O_EXCL);
   if (metadata_fd > 0) {
@@ -54,44 +55,39 @@ void push(const char *queue_name, const unsigned char *data, int size) {
  * @param data Данные для записи.
  * @param size Размер данных в байтах.
  */
-void push_new_metadata(int metadata_fd, const char *path,
-                       const unsigned char *data, int size) {
-
+void push_new_metadata(int metadata_fd, const char *path, char *data,
+                       int size) {
+  printf("Данные в data '%s' \n", data);
   lock_file_by_fd(metadata_fd, 0, 0, F_WRLCK);
-  const Metadata metadata = {1, 0, 1, 0};
-  uint8_t buffer_metadata[20];
-  serializeMetadata(&metadata, buffer_metadata);
-  write(metadata_fd, buffer_metadata, 20);
   uint32_t segment = 1;
 
   FilePaths file_path = {};
-
   build_file_paths(path, segment, &file_path);
 
   uint8_t time[8];
-
-  getBufferAtTime(time);
-
-  uint32_t size_data = sizeof(data);
-  uint8_t size_data_buffer[4];
-  write_u32_be(size_data_buffer, size_data);
+  writeBufferAtTime(time);
 
   int data_file_fd =
       open(file_path.segment_path, O_CREAT | O_WRONLY | O_APPEND);
 
-  write(data_file_fd, size_data_buffer, sizeof(size_data_buffer));
-  write(data_file_fd, time, sizeof(time));
-  write(data_file_fd, data, sizeof(data));
+  write_data_file(data_file_fd, data, size, time);
 
   int index_file_fd = open(file_path.index_path, O_CREAT | O_WRONLY | O_APPEND);
 
-  IndexData index_struct = {1, 1, sizeof(data), 0, (uint64_t)time};
+  IndexData index_struct = {1, 1, size, 0, (uint64_t)time};
 
-  uint8_t index_data[28];
+  write_index_file(index_file_fd, &index_struct);
 
-  serializeIndexData(&index_struct, index_data);
+  int currentOffsetWrite = 4 + sizeof(time) + size;
 
-  write(index_file_fd, index_data, sizeof(index_data));
+  printf("sizeof(time) : '%u' \n", sizeof(time));
+  printf("sizeof(data) : '%u' \n", size);
+
+  printf("Размер сдвига в data файле: '%u' \n", currentOffsetWrite);
+
+  const Metadata metadata = {1, currentOffsetWrite, 1, 1};
+
+  write_metadata_file(metadata_fd, &metadata);
 
   lock_file_by_fd(metadata_fd, 0, 0, F_UNLCK);
 }
@@ -117,31 +113,25 @@ void build_file_paths(const char *base_dir, uint32_t segment,
            INDEX_DATA_FILE);
 }
 
-void push_existing_metadata(int metadata_fd, const char *path,
-                            const unsigned char *data, int size) {
+void push_existing_metadata(int metadata_fd, const char *path, char *data,
+                            int size) {
 
   lock_file_by_fd(metadata_fd, 0, 0, F_WRLCK);
   Metadata existMetadata = {};
 
-  uint8_t buffer[20];
-  read(metadata_fd, buffer, 20);
-  deserializeMetadata(buffer, &existMetadata);
+  read_metadata_file(metadata_fd, &existMetadata);
 
-  int isNewSegment = 0;
+  int is_new_segment = 0;
 
-  uint8_t time[8];
-
-  getBufferAtTime(time);
-
-  if (MAX_SEGMENT_SIZE - (existMetadata.currentOffsetWrite + 8) <
-      sizeof(data)) {
-    isNewSegment = 1;
+  if (MAX_SEGMENT_SIZE - (existMetadata.currentOffsetWrite + DATA_HEADER_SIZE) <
+      size) {
+    is_new_segment = 1;
   }
 
   char segment_id[32];
   uint32_t segment = existMetadata.countSegment;
 
-  if (isNewSegment) {
+  if (is_new_segment) {
     segment = segment + 1;
   }
 
@@ -153,27 +143,59 @@ void push_existing_metadata(int metadata_fd, const char *path,
 
   int data_file_fd = open(file_path.segment_path, O_APPEND | O_WRONLY);
 
-  uint32_t size_data = sizeof(data);
-  uint8_t size_data_buffer[4];
-  write_u32_be(size_data_buffer, size_data);
+  uint8_t time[8];
+  writeBufferAtTime(time);
 
-  write(data_file_fd, size_data_buffer, sizeof(size_data_buffer));
-  write(data_file_fd, time, sizeof(time));
-  write(data_file_fd, data, sizeof(data));
+  write_data_file(data_file_fd, data, size, time);
+
+  uint64_t indexOffsetPos = existMetadata.currentOffsetWrite;
 
   existMetadata.countMessage = existMetadata.countMessage + 1;
-  if (MAX_SEGMENT_SIZE - existMetadata.currentOffsetWrite > sizeof(data)) {
-    existMetadata.currentOffsetWrite =
-        existMetadata.currentOffsetWrite + 4 + sizeof(data);
+  existMetadata.currentOffsetWrite =
+      existMetadata.currentOffsetWrite + 16 + size;
 
-  } else {
-    existMetadata.currentOffsetWrite = 4 + sizeof(data);
+  if (is_new_segment) {
     existMetadata.currentSegment = existMetadata.currentSegment + 1;
     existMetadata.countSegment = existMetadata.countSegment + 1;
   }
 
-  serializeMetadata(&existMetadata, buffer);
-  write(metadata_fd, buffer, 20);
+  int index_file_fd = open(file_path.index_path, O_WRONLY | O_APPEND);
+
+  IndexData index_struct = {existMetadata.countMessage,
+                            existMetadata.currentSegment, size, indexOffsetPos,
+                            (uint64_t)time};
+
+  write_index_file(index_file_fd, &index_struct);
+  write_metadata_file(metadata_fd, &existMetadata);
 
   lock_file_by_fd(metadata_fd, 0, 0, F_UNLCK);
+}
+
+void write_index_file(int index_file_fd, const IndexData *index_struct) {
+  uint8_t index_data_buf[28];
+  serializeIndexData(index_struct, index_data_buf);
+  write(index_file_fd, index_data_buf, sizeof(index_data_buf));
+}
+
+void write_data_file(int data_file_fd, char *data, int size, uint8_t time[8]) {
+
+  uint32_t size_data = size;
+  uint8_t size_data_buffer[4];
+  write_u32_be(size_data_buffer, size_data);
+
+  write(data_file_fd, size_data_buffer, sizeof(size_data_buffer));
+  write(data_file_fd, time, 8);
+  write(data_file_fd, data, sizeof(data));
+}
+
+void write_metadata_file(int metadata_fd, const Metadata *metadata) {
+  uint8_t buffer_metadata[20];
+  serializeMetadata(metadata, buffer_metadata);
+  write(metadata_fd, buffer_metadata, 20);
+}
+
+void read_metadata_file(int metadata_fd, Metadata *metadata) {
+  uint8_t buffer[20];
+  read(metadata_fd, buffer, 20);
+  deserializeMetadata(buffer, metadata);
 }

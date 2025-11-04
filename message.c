@@ -22,7 +22,16 @@ void handleMessage(int epoll_fd) {
   init_current_directory();
   uint8_t header[7];
   ssize_t headerSize = read(epoll_fd, header, sizeof(header));
+
+  if (headerSize != sizeof(header)) {
+    fprintf(stderr,
+            "Ошибка: не удалось прочитать полный заголовок (%zd байт)\n",
+            headerSize);
+    return;
+  }
+
   char header_flag = header[0];
+
   uint16_t queue_name_size = (header[1] << 8) | header[2];
   uint32_t tailer_or_payload_size =
       (header[3] << 24) | (header[4] << 16) | (header[5] << 8) | header[6];
@@ -30,7 +39,7 @@ void handleMessage(int epoll_fd) {
   printf("queue_name_size %u\n", queue_name_size);
   printf("tailer_or_payload_size %u\n", tailer_or_payload_size);
 
-  char *name_queue;
+  char *name_queue = NULL;
 
   char name_queue_stack[512];
 
@@ -39,13 +48,16 @@ void handleMessage(int epoll_fd) {
   else
     name_queue = name_queue_stack;
 
-  char tailer[tailer_or_payload_size + 1];
+  char tailer[tailer_or_payload_size];
 
   ssize_t size =
       read(epoll_fd, name_queue, queue_name_size + tailer_or_payload_size);
 
   memcpy(tailer, name_queue + queue_name_size, tailer_or_payload_size);
-  name_queue[queue_name_size + 1] = '\0';
+
+  name_queue[queue_name_size] = '\0';
+  tailer[tailer_or_payload_size] = '\0';
+
   printf("Название очереди: %s \n", name_queue);
   printf("Название потребителя: %s \n", tailer);
 
@@ -70,14 +82,14 @@ void handleMessage(int epoll_fd) {
   }
 
   if (header_flag == WRITE_MESSAGE) {
-    printf("Запись сообщения:");
+    printf("Запись сообщения: \n");
 
     if (!is_directory_exist(directory)) {
       mkdir(name_queue, 0755);
     }
-    char *data = name_queue + queue_name_size;
-    push(name_queue, data, tailer_or_payload_size);
+    push(name_queue, tailer, tailer_or_payload_size);
     close(epoll_fd);
+    free(name_queue);
     return;
   }
 

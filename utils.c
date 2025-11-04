@@ -3,6 +3,7 @@
 #include <stdio.h>
 #include <sys/stat.h>
 #include <sys/types.h>
+#include <time.h>
 
 int is_directory_exist(const char *path) {
   struct stat st;
@@ -68,8 +69,9 @@ void deserializeIndexData(const uint8_t *buffer, IndexData *entry) {
   entry->time = read_u64_be(buffer + 20);
 }
 
-void getBufferAtTime(uint8_t *buffer) {
+void writeBufferAtTime(uint8_t *buffer) {
   struct timespec ts;
+  clock_gettime(CLOCK_REALTIME, &ts);
   time_t sec = ts.tv_sec;
   for (int i = 0; i < 8; ++i) {
     buffer[7 - i] = (sec >> (i * 8)) & 0xFF;

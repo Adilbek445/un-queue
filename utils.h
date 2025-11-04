@@ -18,6 +18,6 @@ void deserializeMetadata(const uint8_t *buffer, Metadata *meta);
 void serializeIndexData(const IndexData *entry, uint8_t *buffer);
 void deserializeIndexData(const uint8_t *buffer, IndexData *entry);
 
-void getBufferAtTime(uint8_t *buffer);
+void writeBufferAtTime(uint8_t *buffer);
 
 #endif

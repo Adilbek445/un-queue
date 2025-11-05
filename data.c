@@ -36,13 +36,17 @@ void push(const char *queue_name, char *data, int size) {
            get_current_directory(), queue_name, METADATA_FILE);
   printf("%s \n", metadata_path);
 
-  int metadata_fd = open(metadata_path, O_CREAT | O_WRONLY | O_EXCL);
+  int metadata_fd = open(metadata_path, O_CREAT | O_WRONLY | O_EXCL, 0644);
   if (metadata_fd > 0) {
+    printf("Запись в новый файл \n");
     push_new_metadata(metadata_fd, queue_name, data, size);
+
   } else {
-    metadata_fd = open(metadata_path, O_CREAT | O_WRONLY);
+    printf("Запись в существующий файл \n");
+    metadata_fd = open(metadata_path, O_RDWR);
     push_existing_metadata(metadata_fd, queue_name, data, size);
   }
+  close(metadata_fd);
 }
 
 /**
@@ -67,12 +71,15 @@ void push_new_metadata(int metadata_fd, const char *path, char *data,
   uint8_t time[8];
   writeBufferAtTime(time);
 
+  printf("Путь dataFile: %s \n", file_path.segment_path);
+
   int data_file_fd =
-      open(file_path.segment_path, O_CREAT | O_WRONLY | O_APPEND);
+      open(file_path.segment_path, O_CREAT | O_WRONLY | O_APPEND, 0644);
 
   write_data_file(data_file_fd, data, size, time);
 
-  int index_file_fd = open(file_path.index_path, O_CREAT | O_WRONLY | O_APPEND);
+  int index_file_fd =
+      open(file_path.index_path, O_CREAT | O_WRONLY | O_APPEND, 0644);
 
   IndexData index_struct = {1, 1, size, 0, (uint64_t)time};
 
@@ -121,6 +128,11 @@ void push_existing_metadata(int metadata_fd, const char *path, char *data,
 
   read_metadata_file(metadata_fd, &existMetadata);
 
+  printf("currentSegment: %u \n", existMetadata.currentSegment);
+  printf("countSegment: %u \n", existMetadata.countSegment);
+  printf("currentOffsetWrite: %u \n", existMetadata.currentOffsetWrite);
+  printf("countMessage: %u \n", existMetadata.countMessage);
+
   int is_new_segment = 0;
 
   if (MAX_SEGMENT_SIZE - (existMetadata.currentOffsetWrite + DATA_HEADER_SIZE) <
@@ -139,9 +151,19 @@ void push_existing_metadata(int metadata_fd, const char *path, char *data,
 
   build_file_paths(path, segment, &file_path);
 
+  printf("Путь dataFile: %s \n", file_path.segment_path);
+
   snprintf(segment_id, sizeof(segment_id), "data-%07u.dat", segment);
 
-  int data_file_fd = open(file_path.segment_path, O_APPEND | O_WRONLY);
+  int data_file_fd;
+
+  printf("Новый сегмент: %u \n", is_new_segment);
+
+  if (is_new_segment == 1)
+    data_file_fd =
+        open(file_path.segment_path, O_CREAT | O_APPEND | O_WRONLY, 0644);
+  else
+    data_file_fd = open(file_path.segment_path, O_APPEND | O_WRONLY);
 
   uint8_t time[8];
   writeBufferAtTime(time);
@@ -175,6 +197,7 @@ void write_index_file(int index_file_fd, const IndexData *index_struct) {
   uint8_t index_data_buf[28];
   serializeIndexData(index_struct, index_data_buf);
   write(index_file_fd, index_data_buf, sizeof(index_data_buf));
+  close(index_file_fd);
 }
 
 void write_data_file(int data_file_fd, char *data, int size, uint8_t time[8]) {
@@ -186,11 +209,13 @@ void write_data_file(int data_file_fd, char *data, int size, uint8_t time[8]) {
   write(data_file_fd, size_data_buffer, sizeof(size_data_buffer));
   write(data_file_fd, time, 8);
   write(data_file_fd, data, sizeof(data));
+  close(data_file_fd);
 }
 
 void write_metadata_file(int metadata_fd, const Metadata *metadata) {
   uint8_t buffer_metadata[20];
   serializeMetadata(metadata, buffer_metadata);
+  lseek(metadata_fd, 0, SEEK_SET);
   write(metadata_fd, buffer_metadata, 20);
 }
 
